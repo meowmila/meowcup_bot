@@ -9,7 +9,7 @@ from aiogram.types import (
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 
-API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN = "PASTE_YOUR_TOKEN_HERE"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -115,7 +115,11 @@ async def show_result(callback: CallbackQuery):
 # === Назад корректно — с имитацией кликов ===
 @dp.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: CallbackQuery):
-    await menu_handler(callback.message)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏆 Турнир", callback_data="type_tournament"),
+         InlineKeyboardButton(text="🎉 Ивент", callback_data="type_event")]
+    ])
+    await callback.message.edit_text("🔹 Выберите тип мероприятия:", reply_markup=kb)
 
 @dp.callback_query(F.data == "back_to_format")
 async def back_to_format(callback: CallbackQuery):
