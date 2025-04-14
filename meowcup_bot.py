@@ -8,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from aiohttp import web
 
-API_TOKEN = "ТОКЕН_ЗДЕСЬ"
+API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://meowcup-bot.onrender.com{WEBHOOK_PATH}"
 ADMIN_ID = 947800235
