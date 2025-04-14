@@ -9,7 +9,7 @@ from aiogram.types import (
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 
-API_TOKEN = "PASTE_YOUR_TOKEN_HERE"
+API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
