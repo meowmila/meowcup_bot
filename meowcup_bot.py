@@ -99,21 +99,21 @@ async def show_result(callback: CallbackQuery):
         await callback.message.edit_text("🔜 Пока нет турниров по выбранным параметрам.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]]))
         return
 
-    text = f"<b>✅ Вы выбрали:</b>
+    text = f"""<b>✅ Вы выбрали:</b>
 Тип: {data['Тип']}
 Формат: {data['Формат']}
 Дата: {data['Дата']}
 Слот: {data['Слот']}
-Время: {data['Время']}"
+Время: {data['Время']}"""
     for t in filtered:
-        text += f"
+        text += f"""
 
 🏆 <b>{t['Название']}</b>
 𐙚 │ Призовой: {t['Приз']}
 𐙚 │ Стадия: {t['Стадия']}
 𐙚 │ Слоты: {t['Слоты']}
 𐙚 │ Проход: {t['Проход']}
-<a href='{t['Ссылка']}'>Перейти к турниру 🐾</a>"
+<a href='{t['Ссылка']}'>Перейти к турниру 🐾</a>"""
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]]))
 
 # Обработчики "Назад"
