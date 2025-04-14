@@ -6,11 +6,14 @@ from aiogram.enums import ParseMode
 from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 )
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.client.default import DefaultBotProperties
+from aiogram.webhook.aiohttp_server import setup_application
+from aiohttp import web
 
 API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
+WEBHOOK_URL = "https://meowcup-bot.onrender.com/webhook"
 
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -112,7 +115,6 @@ async def show_result(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]])
     await callback.message.edit_text(text, reply_markup=kb)
 
-# === Назад корректно — с имитацией кликов ===
 @dp.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -151,8 +153,14 @@ async def back_to_slot(callback: CallbackQuery):
     )
     await choose_slot(fake_callback)
 
+async def on_startup(app):
+    await bot.set_webhook(WEBHOOK_URL)
+
 async def main():
-    await dp.start_polling(bot)
+    dp.startup.register(on_startup)
+    app = web.Application()
+    setup_application(app, dp, bot=bot)
+    web.run_app(app, port=10000)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
