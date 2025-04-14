@@ -71,7 +71,46 @@ async def back_slot(callback: CallbackQuery):
     ])
     await callback.message.edit_text("🔹 Выберите слот:", reply_markup=kb)
 
-# Остальной код остается без изменений (handlers, admin, webhook и запуск)
+# === ADMIN === (остальной код с правками кнопок назад)
+
+@dp.callback_query(F.data == "back_to_menu")
+async def back_menu(callback: CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏆 Турнир", callback_data="type_tournament"),
+         InlineKeyboardButton(text="🎉 Ивент", callback_data="type_event")]
+    ])
+    await callback.message.edit_text("🔹 Выберите тип мероприятия:", reply_markup=kb)
+
+@dp.callback_query(F.data == "back_to_format")
+async def back_format(callback: CallbackQuery):
+    current_type = user_state.get(callback.from_user.id, {}).get("Тип", "tournament")
+    user_state[callback.from_user.id] = {"Тип": current_type}
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Duo", callback_data="format_Duo"),
+         InlineKeyboardButton(text="Squad", callback_data="format_Squad")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_menu")]
+    ])
+    await callback.message.edit_text("🔹 Выберите формат:", reply_markup=kb)
+
+@dp.callback_query(F.data == "back_to_date")
+async def back_date(callback: CallbackQuery):
+    current_format = user_state.get(callback.from_user.id, {}).get("Формат", "Duo")
+    user_state[callback.from_user.id]["Формат"] = current_format
+    base = datetime.strptime("14.04.2025", "%d.%m.%Y")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=(base + timedelta(days=i)).strftime("%d.%m.%Y"), callback_data=f"date_{(base + timedelta(days=i)).strftime('%d.%m.%Y')}" ) for i in range(3)
+    ], [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_format")]])
+    await callback.message.edit_text("🔹 Выберите дату:", reply_markup=kb)
+
+@dp.callback_query(F.data == "back_to_slot")
+async def back_slot(callback: CallbackQuery):
+    current_date = user_state.get(callback.from_user.id, {}).get("Дата", "14.04.2025")
+    user_state[callback.from_user.id]["Дата"] = current_date
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🆓 Free", callback_data="slot_Free"), InlineKeyboardButton(text="💸 VIP", callback_data="slot_VIP")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_date")]
+    ])
+    await callback.message.edit_text("🔹 Выберите слот:", reply_markup=kb)
 # Webhook и запуск:
 
 async def on_startup(app):
