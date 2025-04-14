@@ -156,12 +156,11 @@ async def back_to_slot(callback: CallbackQuery):
 async def on_startup(app):
     await bot.set_webhook(WEBHOOK_URL)
 
-async def main():
-    dp.startup.register(on_startup)
-    app = web.Application()
-    setup_application(app, dp, bot=bot)
-    web.run_app(app, port=10000)
+async def on_startup(app):
+    await bot.set_webhook(WEBHOOK_URL)
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+dp.startup.register(on_startup)
+
+app = web.Application()
+setup_application(app, dp, bot=bot)
+web.run_app(app, port=10000)
