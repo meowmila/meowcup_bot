@@ -88,7 +88,8 @@ async def show_result(callback: CallbackQuery):
     filtered = [t for t in tournaments if t['Тип'] == data['Тип'] and t['Формат'] == data['Формат'] and t['Дата'] == data['Дата'] and t['Слот'] == data['Слот'] and t['Время'] == data['Время']]
 
     if not filtered:
-        await callback.message.edit_text("🔜 Пока нет турниров по выбранным параметрам.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]]))
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]])
+        await callback.message.edit_text("🔜 Пока нет турниров по выбранным параметрам.", reply_markup=kb)
         return
 
     text = (
@@ -108,24 +109,43 @@ async def show_result(callback: CallbackQuery):
                  f"𐙚 │ Проход: {t['Проход']}\n"
                  f"<a href='{t['Ссылка']}'>Перейти к турниру 🐾</a>")
 
-    await callback.message.edit_text(text)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]])
+    await callback.message.edit_text(text, reply_markup=kb)
 
-# === Назад ===
+# === Назад корректно — с имитацией кликов ===
 @dp.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: CallbackQuery):
     await menu_handler(callback.message)
 
 @dp.callback_query(F.data == "back_to_format")
 async def back_to_format(callback: CallbackQuery):
-    await choose_format(callback)
+    fake_callback = CallbackQuery(
+        id=callback.id,
+        from_user=callback.from_user,
+        message=callback.message,
+        data=f"type_{user_state[callback.from_user.id].get('Тип', 'tournament')}"
+    )
+    await choose_format(fake_callback)
 
 @dp.callback_query(F.data == "back_to_date")
 async def back_to_date(callback: CallbackQuery):
-    await choose_date(callback)
+    fake_callback = CallbackQuery(
+        id=callback.id,
+        from_user=callback.from_user,
+        message=callback.message,
+        data=f"format_{user_state[callback.from_user.id].get('Формат', 'Duo')}"
+    )
+    await choose_date(fake_callback)
 
 @dp.callback_query(F.data == "back_to_slot")
 async def back_to_slot(callback: CallbackQuery):
-    await choose_slot(callback)
+    fake_callback = CallbackQuery(
+        id=callback.id,
+        from_user=callback.from_user,
+        message=callback.message,
+        data=f"date_{user_state[callback.from_user.id].get('Дата', '14.04.2025')}"
+    )
+    await choose_slot(fake_callback)
 
 async def main():
     await dp.start_polling(bot)
