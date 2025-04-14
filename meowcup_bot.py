@@ -9,7 +9,7 @@ from aiogram.types import (
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 
-API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN = "PASTE_YOUR_TOKEN_HERE"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -42,7 +42,7 @@ async def choose_format(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Duo", callback_data="format_Duo"),
          InlineKeyboardButton(text="Squad", callback_data="format_Squad")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_start")]
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_menu")]
     ])
     await callback.message.edit_text("🔹 Выберите формат:", reply_markup=kb)
 
@@ -51,10 +51,12 @@ async def choose_date(callback: CallbackQuery):
     user_state[callback.from_user.id]["Формат"] = callback.data.split("_")[1]
     base_date = datetime.strptime("14.04.2025", "%d.%m.%Y").date()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=base_date.strftime("%d.%m.%Y"), callback_data=f"date_{base_date.strftime('%d.%m.%Y')}"),
-         InlineKeyboardButton(text=(base_date + timedelta(days=1)).strftime("%d.%m.%Y"), callback_data=f"date_{(base_date + timedelta(days=1)).strftime('%d.%m.%Y')}")],
-        [InlineKeyboardButton(text=(base_date + timedelta(days=2)).strftime("%d.%m.%Y"), callback_data=f"date_{(base_date + timedelta(days=2)).strftime('%d.%m.%Y')}")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_format")]
+        [
+            InlineKeyboardButton(text=base_date.strftime("%d.%m.%Y"), callback_data=f"date_{base_date.strftime('%d.%m.%Y')}"),
+            InlineKeyboardButton(text=(base_date + timedelta(days=1)).strftime("%d.%m.%Y"), callback_data=f"date_{(base_date + timedelta(days=1)).strftime('%d.%m.%Y')}"),
+            InlineKeyboardButton(text=(base_date + timedelta(days=2)).strftime("%d.%m.%Y"), callback_data=f"date_{(base_date + timedelta(days=2)).strftime('%d.%m.%Y')}")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_format")]
     ])
     await callback.message.edit_text("🔹 Выберите дату:", reply_markup=kb)
 
@@ -64,7 +66,7 @@ async def choose_slot(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🆓 Free", callback_data="slot_Free"),
          InlineKeyboardButton(text="💸 VIP", callback_data="slot_VIP")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_date")]
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_date")]
     ])
     await callback.message.edit_text("🔹 Выберите слот:", reply_markup=kb)
 
@@ -74,7 +76,7 @@ async def choose_time(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="18:00", callback_data="time_18:00"),
          InlineKeyboardButton(text="21:00", callback_data="time_21:00")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_slot")]
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]
     ])
     await callback.message.edit_text("🔹 Выберите время:", reply_markup=kb)
 
@@ -86,7 +88,7 @@ async def show_result(callback: CallbackQuery):
     filtered = [t for t in tournaments if t['Тип'] == data['Тип'] and t['Формат'] == data['Формат'] and t['Дата'] == data['Дата'] and t['Слот'] == data['Слот'] and t['Время'] == data['Время']]
 
     if not filtered:
-        await callback.message.edit_text("🔜 Пока нет турниров по выбранным параметрам.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_slot")]]))
+        await callback.message.edit_text("🔜 Пока нет турниров по выбранным параметрам.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_slot")]]))
         return
 
     text = (
@@ -107,6 +109,23 @@ async def show_result(callback: CallbackQuery):
                  f"<a href='{t['Ссылка']}'>Перейти к турниру 🐾</a>")
 
     await callback.message.edit_text(text)
+
+# === Назад ===
+@dp.callback_query(F.data == "back_to_menu")
+async def back_to_menu(callback: CallbackQuery):
+    await menu_handler(callback.message)
+
+@dp.callback_query(F.data == "back_to_format")
+async def back_to_format(callback: CallbackQuery):
+    await choose_format(callback)
+
+@dp.callback_query(F.data == "back_to_date")
+async def back_to_date(callback: CallbackQuery):
+    await choose_date(callback)
+
+@dp.callback_query(F.data == "back_to_slot")
+async def back_to_slot(callback: CallbackQuery):
+    await choose_slot(callback)
 
 async def main():
     await dp.start_polling(bot)
