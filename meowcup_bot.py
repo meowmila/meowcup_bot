@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import asyncio
 
-API_TOKEN = os.getenv("BOT_TOKEN") or "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN ="8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
