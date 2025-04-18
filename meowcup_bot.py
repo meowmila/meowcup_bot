@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import asyncio
 
-API_TOKEN ="8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN = os.getenv("BOT_TOKEN") or "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
@@ -189,12 +189,12 @@ async def universal_flow(call: CallbackQuery):
 
     elif any(t['title'] == data for t in tournaments):
         t = next(t for t in tournaments if t['title'] == data)
-        text = f"🏆 <b>{t['title']}</b>
+        text = f"""🏆 <b>{t['title']}</b>
 
 🍬 │ Призовой фонд: 💸
 🍬 │ Фри слотов: 14
 🍬 │ Стадия: {t['stage']}
-🍬 │ Проход: Топ 6"
+🍬 │ Проход: Топ 6"""
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔗 Перейти к турниру", url=t['link'])],
             [InlineKeyboardButton(text="Назад", callback_data="Назад")]
