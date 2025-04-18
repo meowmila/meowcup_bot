@@ -1,10 +1,10 @@
-# MEOW.CUP Bot — Полный финальный код со всеми фишками
+# MEOW.CUP Bot — Финальный код с рассылкой и улучшенным выводом турнира
 
 import os
 import logging
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -20,14 +20,16 @@ ADMIN_ID = 947800235
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Данные
 users = set()
 tournaments = []
-photos = {}  # key = stage/time/date/label
+photos = {}
 ctx = {}
 
 class AddTournament(StatesGroup):
     waiting_photo = State()
+
+class BroadcastState(StatesGroup):
+    waiting_content = State()
 
 # Утилиты
 
@@ -77,7 +79,7 @@ async def start_cmd(message: Message):
 async def admin_panel(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
-    kb = build_keyboard(["Добавить турнир", "Загрузить фото кнопки", "Пользователи"])
+    kb = build_keyboard(["Добавить турнир", "Загрузить фото кнопки", "Пользователи", "📢 Рассылка"])
     await message.answer("Панель администратора:", reply_markup=kb)
 
 @dp.callback_query(F.data == "Пользователи")
@@ -88,10 +90,34 @@ async def list_users(call: CallbackQuery):
 async def ask_photo_upload(call: CallbackQuery):
     await call.message.answer("Отправьте фото с подписью = код кнопки (например: 18:00 или 'турнир')")
 
+@dp.callback_query(F.data == "📢 Рассылка")
+async def start_broadcast(call: CallbackQuery, state: FSMContext):
+    await state.set_state(BroadcastState.waiting_content)
+    await call.message.answer("Отправьте сообщение для рассылки (можно с фото)")
+
+@dp.message(BroadcastState.waiting_content)
+async def handle_broadcast(message: Message, state: FSMContext):
+    success = 0
+    fail = 0
+    for uid in users:
+        try:
+            if message.photo:
+                await bot.send_photo(uid, photo=message.photo[-1].file_id, caption=message.caption or "")
+            else:
+                await bot.send_message(uid, message.text or "")
+            success += 1
+        except:
+            fail += 1
+    await message.answer(f"📢 Рассылка завершена! ✅ {success}, ❌ {fail}")
+    await state.clear()
+
 @dp.message(F.photo & F.caption & (F.from_user.id == ADMIN_ID))
 async def photo_button_upload(message: Message):
     photos[message.caption.lower()] = message.photo[-1].file_id
     await message.answer("Фото сохранено под ключом: " + message.caption)
+
+class AddTournament(StatesGroup):
+    waiting_photo = State()
 
 @dp.callback_query(F.data == "Добавить турнир")
 async def ask_tournament_data(call: CallbackQuery, state: FSMContext):
@@ -163,8 +189,16 @@ async def universal_flow(call: CallbackQuery):
 
     elif any(t['title'] == data for t in tournaments):
         t = next(t for t in tournaments if t['title'] == data)
-        text = f"<b>{t['title']}</b>\n{t['desc']}\n\nСтадия: {t['stage']} | {t['time']} | {t['date']}\nСлот: {t['type']}"
-        kb = build_keyboard(["✍️Написать в лс", "💫Перейти к турниру", "Назад"] if t['type'] == "вип" else ["💫Перейти к турниру", "Назад"])
+        text = f"🏆 <b>{t['title']}</b>
+
+🍬 │ Призовой фонд: 💸
+🍬 │ Фри слотов: 14
+🍬 │ Стадия: {t['stage']}
+🍬 │ Проход: Топ 6"
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 Перейти к турниру", url=t['link'])],
+            [InlineKeyboardButton(text="Назад", callback_data="Назад")]
+        ])
         await call.message.answer_photo(t['photo'], caption=text, reply_markup=kb)
 
     elif data == "Назад":
@@ -188,4 +222,9 @@ async def show_titles(call, uid):
 # Запуск
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(dp.start_polling(bot))
+
+    async def start():
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+
+    asyncio.run(start())
