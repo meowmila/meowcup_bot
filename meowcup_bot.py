@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import asyncio
 
-API_TOKEN ="8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
@@ -69,10 +69,12 @@ def cleanup_old():
 @dp.message(F.text == "/start")
 async def start_cmd(message: Message):
     users.add(message.from_user.id)
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(types.KeyboardButton("🟦 Меню"))
+    kb = types.ReplyKeyboardMarkup(
+        keyboard=[[types.KeyboardButton(text="🟦 Меню")]],
+        resize_keyboard=True
+    )
     if message.from_user.id == ADMIN_ID:
-        kb.add(types.KeyboardButton("🔧 Панель администратора"))
+        kb.keyboard.append([types.KeyboardButton(text="🔧 Панель администратора")])
     await message.answer("Добро пожаловать в MEOW.CUP!", reply_markup=kb)
 
 @dp.message(F.text == "🔧 Панель администратора")
@@ -111,7 +113,7 @@ async def handle_broadcast(message: Message, state: FSMContext):
     await message.answer(f"📢 Рассылка завершена! ✅ {success}, ❌ {fail}")
     await state.clear()
 
-@dp.message(F.photo & F.caption & (F.from_user.id == ADMIN_ID))
+@dp.message(F.from_user.id == ADMIN_ID, F.photo, F.caption)
 async def photo_button_upload(message: Message):
     photos[message.caption.lower()] = message.photo[-1].file_id
     await message.answer("Фото сохранено под ключом: " + message.caption)
