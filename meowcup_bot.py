@@ -1,244 +1,191 @@
-import asyncio
+# MEOW.CUP Bot — Полный финальный код со всеми фишками
+
+import os
 import logging
-from datetime import datetime, timedelta
-import json
-
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
-from aiogram.types import (
-    Message, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton,
-    FSInputFile
-)
-from aiogram.client.default import DefaultBotProperties
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
+from datetime import datetime, timedelta
+from PIL import Image, ImageDraw, ImageFont
+import io
+import asyncio
 
-API_TOKEN = "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
+API_TOKEN = os.getenv("BOT_TOKEN") or "8193369093:AAGaD0CRTKhx2Ma2vhXiuOHjBkrNCQp23AU"
 ADMIN_ID = 947800235
 
+bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher(storage=MemoryStorage())
+
+# Данные
+users = set()
 tournaments = []
-users = {}
-admin_state = {}
+photos = {}  # key = stage/time/date/label
+ctx = {}
 
-bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+class AddTournament(StatesGroup):
+    waiting_photo = State()
 
-def save_tournaments():
-    with open("tournaments.json", "w", encoding="utf-8") as f:
-        json.dump(tournaments, f, ensure_ascii=False, indent=2)
+# Утилиты
 
-def load_tournaments():
-    global tournaments
+def get_upcoming_dates():
+    today = datetime.now()
+    return [(today + timedelta(days=i)).strftime("%d.%m.%Y") for i in range(3)]
+
+def build_keyboard(buttons, row=2):
+    builder = InlineKeyboardBuilder()
+    for b in buttons:
+        builder.button(text=b, callback_data=b)
+    builder.adjust(row)
+    return builder.as_markup()
+
+def overlay_text_on_image(image_bytes, text):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    draw = ImageDraw.Draw(image)
     try:
-        with open("tournaments.json", "r", encoding="utf-8") as f:
-            tournaments = json.load(f)
-    except FileNotFoundError:
-        tournaments = []
+        font = ImageFont.truetype("arial.ttf", 40)
+    except:
+        font = ImageFont.load_default()
+    width, _ = image.size
+    text_width = draw.textlength(text, font=font)
+    draw.rectangle([(0, 0), (width, 60)], fill=(0, 0, 0, 180))
+    draw.text(((width - text_width) / 2, 10), text, fill="white", font=font)
+    output = io.BytesIO()
+    image.save(output, format='PNG')
+    output.seek(0)
+    return output
 
-def get_date_keyboard():
-    today = datetime.today()
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=(today + timedelta(days=i)).strftime("%d.%m.%Y"), callback_data=f"date:{(today + timedelta(days=i)).strftime('%Y-%m-%d')}")]
-        for i in range(3)
-    ])
+def cleanup_old():
+    today = datetime.now().strftime("%d.%m.%Y")
+    global tournaments
+    tournaments = [t for t in tournaments if t['date'] >= today]
 
-def get_type_keyboard(date):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="FREE", callback_data=f"type:{date}:free")],
-        [InlineKeyboardButton(text="VIP", callback_data=f"type:{date}:vip")],
-    ])
-
-def get_time_keyboard(date, ttype):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="18:00", callback_data=f"time:{date}:{ttype}:18:00")],
-        [InlineKeyboardButton(text="21:00", callback_data=f"time:{date}:{ttype}:21:00")],
-    ])
-
-def get_stage_keyboard(date, ttype, time):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=stage, callback_data=f"stage:{date}:{ttype}:{time}:{stage}")]
-        for stage in ["1/8", "1/4", "1/2"]
-    ])
-
-def get_tournament_keyboard(filtered):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t['name'], callback_data=f"show:{t['id']}")]
-        for t in filtered
-    ]) if filtered else None
-
-def filter_tournaments(date, ttype, time, stage):
-    return [t for t in tournaments if t['date'] == date and t['type'] == ttype and t['time'] == time and t['stage'] == stage]
-
-@dp.message(CommandStart())
-async def start(message: Message):
-    users[message.from_user.id] = message.from_user.full_name
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎮 Турнир", callback_data="start:tournament")]
-    ])
+# Команды
+@dp.message(F.text == "/start")
+async def start_cmd(message: Message):
+    users.add(message.from_user.id)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(types.KeyboardButton("🟦 Меню"))
     if message.from_user.id == ADMIN_ID:
-        kb.inline_keyboard.append([InlineKeyboardButton(text="⚙️ Админ-панель", callback_data="admin:panel")])
+        kb.add(types.KeyboardButton("🔧 Панель администратора"))
     await message.answer("Добро пожаловать в MEOW.CUP!", reply_markup=kb)
 
-@dp.callback_query(F.data == "start:tournament")
-async def select_date(call: CallbackQuery):
-    await call.message.answer("📅 Выберите дату:", reply_markup=get_date_keyboard())
-
-@dp.callback_query(F.data.startswith("date:"))
-async def select_type(call: CallbackQuery):
-    date = call.data.split(":")[1]
-    await call.message.answer("📂 Выберите тип:", reply_markup=get_type_keyboard(date))
-
-@dp.callback_query(F.data.startswith("type:"))
-async def select_time(call: CallbackQuery):
-    _, date, ttype = call.data.split(":")
-    await call.message.answer("⏰ Выберите время:", reply_markup=get_time_keyboard(date, ttype))
-
-@dp.callback_query(F.data.startswith("time:"))
-async def select_stage(call: CallbackQuery):
-    _, date, ttype, time = call.data.split(":")
-    await call.message.answer("🎯 Выберите стадию:", reply_markup=get_stage_keyboard(date, ttype, time))
-
-@dp.callback_query(F.data.startswith("stage:"))
-async def show_filtered_tournaments(call: CallbackQuery):
-    _, date, ttype, time, stage = call.data.split(":")
-    filtered = filter_tournaments(date, ttype, time, stage)
-    keyboard = get_tournament_keyboard(filtered)
-    if keyboard:
-        await call.message.answer("📋 Турниры:", reply_markup=keyboard)
-    else:
-        await call.message.answer("❌ Турниров не найдено.")
-
-@dp.callback_query(F.data.startswith("show:"))
-async def show_tournament(call: CallbackQuery):
-    tid = int(call.data.split(":")[1])
-    tour = next((t for t in tournaments if t['id'] == tid), None)
-    if not tour:
-        return await call.message.answer("⚠️ Турнир не найден.")
-    text = (
-        f"<b>{tour['name']}</b>\n"
-        f"🏆 Приз: {tour['prize']}\n"
-        f"🗓️ {tour['date']} {tour['time']}\n"
-        f"🎯 Стадия: {tour['stage']}\n"
-        f"🔗 Вход: {tour['join']}\n"
-    )
-    try:
-        if tour.get("photo"):
-            await call.message.answer_photo(photo=tour["photo"], caption=text)
-        else:
-            await call.message.answer(text)
-    except TelegramBadRequest:
-        await call.message.answer(text)
-
-@dp.callback_query(F.data == "admin:panel")
-async def admin_panel(call: CallbackQuery):
-    if call.from_user.id != ADMIN_ID:
-        return await call.answer("Нет доступа", show_alert=True)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить турнир", callback_data="admin:add")],
-        [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin:broadcast")],
-        [InlineKeyboardButton(text="🗑 Очистить прошедшие", callback_data="admin:clean")],
-        [InlineKeyboardButton(text="📥 Экспорт JSON", callback_data="admin:export")]
-    ])
-    await call.message.answer("⚙️ Админ-панель:", reply_markup=kb)
-
-@dp.callback_query(F.data == "admin:export")
-async def export_tournaments(call: CallbackQuery):
-    save_tournaments()
-    file = FSInputFile("tournaments.json")
-    await call.message.answer_document(file, caption="📤 Экспорт турниров в JSON")
-
-@dp.callback_query(F.data == "admin:clean")
-async def clean_tournaments(call: CallbackQuery):
-    now = datetime.now().date()
-    before = len(tournaments)
-    tournaments[:] = [t for t in tournaments if datetime.strptime(t['date'], "%Y-%m-%d").date() >= now]
-    save_tournaments()
-    await call.message.answer(f"🧹 Удалено {before - len(tournaments)} старых турниров.")
-
-@dp.callback_query(F.data == "admin:add")
-async def start_add_tournament(call: CallbackQuery):
-    admin_state[call.from_user.id] = {"step": "name", "data": {}}
-    await call.message.answer("Введите название турнира:")
-
-@dp.message(F.text)
-async def handle_admin_input(message: Message):
-    if message.from_user.id != ADMIN_ID or message.from_user.id not in admin_state:
+@dp.message(F.text == "🔧 Панель администратора")
+async def admin_panel(message: Message):
+    if message.from_user.id != ADMIN_ID:
         return
+    kb = build_keyboard(["Добавить турнир", "Загрузить фото кнопки", "Пользователи"])
+    await message.answer("Панель администратора:", reply_markup=kb)
 
-    step = admin_state[message.from_user.id]["step"]
-    data = admin_state[message.from_user.id]["data"]
+@dp.callback_query(F.data == "Пользователи")
+async def list_users(call: CallbackQuery):
+    await call.message.answer("Пользователей: " + str(len(users)))
 
-    if step == "name":
-        data["name"] = message.text
-        admin_state[message.from_user.id]["step"] = "date"
-        await message.answer("Дата (ГГГГ-ММ-ДД):")
-    elif step == "date":
-        data["date"] = message.text
-        admin_state[message.from_user.id]["step"] = "time"
-        await message.answer("Время:")
-    elif step == "time":
-        data["time"] = message.text
-        admin_state[message.from_user.id]["step"] = "type"
-        await message.answer("Тип (free/vip):")
-    elif step == "type":
-        data["type"] = message.text
-        admin_state[message.from_user.id]["step"] = "stage"
-        await message.answer("Стадия:")
-    elif step == "stage":
-        data["stage"] = message.text
-        admin_state[message.from_user.id]["step"] = "prize"
-        await message.answer("Приз:")
-    elif step == "prize":
-        data["prize"] = message.text
-        admin_state[message.from_user.id]["step"] = "join"
-        await message.answer("Ссылка на вход:")
-    elif step == "join":
-        data["join"] = message.text
-        admin_state[message.from_user.id]["step"] = "photo"
-        await message.answer("Фото или 'нет':")
-    elif step == "photo":
-        if message.photo:
-            file_id = message.photo[-1].file_id
-        elif message.text.lower() == "нет":
-            file_id = None
-        else:
-            await message.answer("Пришлите фото или напишите 'нет'")
-            return
-        data["photo"] = file_id
-        data["id"] = len(tournaments) + 1
-        tournaments.append(data)
-        save_tournaments()
-        await message.answer("✅ Турнир добавлен!")
-        del admin_state[message.from_user.id]
+@dp.callback_query(F.data == "Загрузить фото кнопки")
+async def ask_photo_upload(call: CallbackQuery):
+    await call.message.answer("Отправьте фото с подписью = код кнопки (например: 18:00 или 'турнир')")
 
-@dp.message(F.photo)
-async def handle_photo(message: Message):
-    if message.from_user.id == ADMIN_ID and message.from_user.id in admin_state:
-        await handle_admin_input(message)
+@dp.message(F.photo & F.caption & (F.from_user.id == ADMIN_ID))
+async def photo_button_upload(message: Message):
+    photos[message.caption.lower()] = message.photo[-1].file_id
+    await message.answer("Фото сохранено под ключом: " + message.caption)
 
-@dp.callback_query(F.data == "admin:broadcast")
-async def broadcast_text(call: CallbackQuery):
-    admin_state[call.from_user.id] = {"step": "broadcast"}
-    await call.message.answer("✉️ Введите текст для рассылки:")
+@dp.callback_query(F.data == "Добавить турнир")
+async def ask_tournament_data(call: CallbackQuery, state: FSMContext):
+    await call.message.answer("Отправь фото с подписью в формате:\n<дата> | <время> | <тип> | <стадия> | <название> | <описание> | <ссылка>")
+    await state.set_state(AddTournament.waiting_photo)
 
-@dp.message(F.text)
-async def handle_broadcast(message: Message):
-    if message.from_user.id == ADMIN_ID and admin_state.get(message.from_user.id, {}).get("step") == "broadcast":
-        count = 0
-        for uid in users:
-            try:
-                await bot.send_message(uid, message.text)
-                count += 1
-            except:
-                continue
-        await message.answer(f"📬 Отправлено {count} сообщений.")
-        del admin_state[message.from_user.id]
+@dp.message(AddTournament.waiting_photo & F.photo)
+async def handle_add_tournament(message: Message, state: FSMContext):
+    if not message.caption:
+        await message.answer("Добавь подпись к фото!")
+        return
+    parts = [p.strip() for p in message.caption.split("|")]
+    if len(parts) != 7:
+        await message.answer("Неверный формат. Должно быть 7 параметров через |")
+        return
+    date, time, type_, stage, title, desc, link = parts
+    file = await bot.download(message.photo[-1])
+    img = overlay_text_on_image(file.read(), title)
+    sent = await bot.send_photo(message.chat.id, photo=img)
+    tournaments.append({
+        "date": date, "time": time, "type": type_.lower(), "stage": stage,
+        "title": title, "desc": desc, "link": link, "photo": sent.photo[-1].file_id
+    })
+    await message.answer("✅ Турнир добавлен!")
+    await state.clear()
+    cleanup_old()
 
-async def main():
+@dp.message(F.text == "🟦 Меню")
+async def open_main_menu(message: Message):
+    kb = build_keyboard(["турнир", "ивент", "праки"], row=1)
+    pid = photos.get("меню")
+    await message.answer_photo(pid, caption="Выберите тип:", reply_markup=kb) if pid else await message.answer("Выберите тип:", reply_markup=kb)
+
+@dp.callback_query()
+async def universal_flow(call: CallbackQuery):
+    uid = call.from_user.id
+    data = call.data
+
+    if data in ["турнир", "ивент", "праки"]:
+        ctx[uid] = {"type": data}
+        kb = build_keyboard(get_upcoming_dates(), row=1)
+        pid = photos.get(data)
+        await call.message.answer_photo(pid, caption="Выберите дату:", reply_markup=kb) if pid else await call.message.answer("Выберите дату:", reply_markup=kb)
+
+    elif data in get_upcoming_dates():
+        ctx[uid]["date"] = data
+        kb = build_keyboard(["18:00", "21:00"])
+        pid = photos.get(data)
+        await call.message.answer_photo(pid, caption="Выберите время:", reply_markup=kb) if pid else await call.message.answer("Выберите время:", reply_markup=kb)
+
+    elif data in ["18:00", "21:00"]:
+        ctx[uid]["time"] = data
+        if ctx[uid]['type'] == "праки":
+            return await show_titles(call, uid)
+        stages = sorted(set(t['stage'] for t in tournaments if t['date'] == ctx[uid]['date'] and t['time'] == data and t['type'] == ctx[uid]['type']))
+        if not stages:
+            return await show_titles(call, uid)
+        kb = build_keyboard(stages)
+        await call.message.answer("Выберите стадию:", reply_markup=kb)
+
+    elif data in ["1/8", "1/4", "1/2", "финал"]:
+        ctx[uid]['stage'] = data
+        kb = build_keyboard(["duo", "squad"])
+        await call.message.answer("Выберите формат:", reply_markup=kb)
+
+    elif data in ["duo", "squad"]:
+        ctx[uid]['format'] = data
+        await show_titles(call, uid)
+
+    elif any(t['title'] == data for t in tournaments):
+        t = next(t for t in tournaments if t['title'] == data)
+        text = f"<b>{t['title']}</b>\n{t['desc']}\n\nСтадия: {t['stage']} | {t['time']} | {t['date']}\nСлот: {t['type']}"
+        kb = build_keyboard(["✍️Написать в лс", "💫Перейти к турниру", "Назад"] if t['type'] == "вип" else ["💫Перейти к турниру", "Назад"])
+        await call.message.answer_photo(t['photo'], caption=text, reply_markup=kb)
+
+    elif data == "Назад":
+        await open_main_menu(call.message)
+
+async def show_titles(call, uid):
+    filters = ctx[uid]
+    filtered = [t for t in tournaments if all([
+        t['type'] == filters['type'],
+        t['date'] == filters['date'],
+        t['time'] == filters['time'],
+        filters.get('stage') is None or t['stage'] == filters['stage'],
+        filters.get('format') is None or t.get('format') == filters['format']
+    ])]
+    if not filtered:
+        await call.message.answer("Нет турниров по этим параметрам")
+        return
+    kb = build_keyboard([t['title'] for t in filtered], row=1)
+    await call.message.answer("Выберите турнир:", reply_markup=kb)
+
+# Запуск
+if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    load_tournaments()
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(dp.start_polling(bot))
